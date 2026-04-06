@@ -1,17 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
-import { Battery, Signal, RefreshCw, Zap, Radio, Bluetooth, Plus, QrCode } from "lucide-react";
+import { Signal, RefreshCw, Zap, Radio, Bluetooth, Plus, QrCode, Settings, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { useCattle } from "../context/CattleContext";
+import type { CattleData } from "../context/CattleContext";
 
-const cattlePositions = [
-  { id: "ID-002", position: 15 },
-  { id: "ID-005", position: 28 },
-  { id: "ID-007", position: 42 },
-  { id: "ID-009", position: 56 },
-  { id: "ID-012", position: 70 },
-  { id: "ID-014", position: 85 },
-];
-
+// cattlePositions is now generated dynamically
 const iTagData = [
   { id: "ID-002", mac: "A4:C1:38:7F:2E:D1", rssi: -45, status: "Sangat Kuat" },
   { id: "ID-005", mac: "B2:D8:4A:9C:1F:E3", rssi: -62, status: "Kuat" },
@@ -23,58 +17,120 @@ const iTagData = [
   { id: "ID-003", mac: "B4:D1:9A:C5:8F:E6", rssi: -55, status: "Kuat" },
 ];
 
-const maintenanceLogs = [
-  { date: "2026-04-04 08:30", event: "RUMI-SYNC berhasil menyelesaikan scan pada ID-018", type: "scan" },
-  { date: "2026-04-03 19:45", event: "Koneksi Bluetooth re-established dengan ID-002", type: "connection" },
-  { date: "2026-04-03 14:20", event: "Sinkronisasi data aktivitas 20 sapi selesai", type: "sync" },
-  { date: "2026-04-02 09:15", event: "Kalibrasi sensor rumination berhasil", type: "calibration" },
-  { date: "2026-04-01 16:30", event: "Update firmware RUMI-SYNC v2.1.4", type: "update" },
-  { date: "2026-03-31 12:00", event: "Pencarian iTag baru ditemukan 3 perangkat", type: "scan" },
+const initialMaintenanceLogs = [
+  { id: 1, date: "Hari ini 10:15", event: "Sensor ID-050 terputus dari jaringan", type: "error", resolvable: true },
+  { id: 2, date: "2026-04-06 08:30", event: "RUMI-SYNC berhasil menyelesaikan scan pada ID-018", type: "scan", resolvable: false },
+  { id: 3, date: "2026-04-06 19:45", event: "Sinyal iTag ID-008 hilang tiba-tiba", type: "error", resolvable: true },
+  { id: 4, date: "2026-04-05 14:20", event: "Sinkronisasi data aktivitas 20 sapi selesai", type: "sync", resolvable: false },
+  { id: 5, date: "2026-04-04 09:15", event: "Kalibrasi sensor rumination berhasil", type: "calibration", resolvable: false },
 ];
+
+const cattleBreedsList = ["Brahman Cross", "Simental", "Limosin", "Ongole", "Bali", "Madura", "Holstein"];
 
 export function SystemControl() {
   const [activeTab, setActiveTab] = useState("live-monitor");
   const [devicePosition, setDevicePosition] = useState(0);
   const [currentCattleIndex, setCurrentCattleIndex] = useState(0);
   const [direction, setDirection] = useState(1);
-  
-  // Form states untuk TAB 2
-  const [newCattleId, setNewCattleId] = useState("");
-  const [newCattleGender, setNewCattleGender] = useState("Betina");
-  const [newCattleAge, setNewCattleAge] = useState("");
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+
+  const { addCattle, cattleData } = useCattle();
+
+  // Batches calculation
+  const batches = useMemo(() => {
+    // Sort array by numeral ID (e.g. ID-001 -> 1) to establish sequential sensor logic
+    const sortedData = [...cattleData].sort((a, b) => {
+      const numA = parseInt(a.id.replace(/\\D/g, '')) || 0;
+      const numB = parseInt(b.id.replace(/\\D/g, '')) || 0;
+      return numA - numB;
+    });
+
+    const arr = [];
+    const size = 10;
+    for (let i = 0; i < sortedData.length; i += size) {
+      const slice = sortedData.slice(i, i + size);
+      const firstId = slice[0].id;
+      const lastId = slice[slice.length - 1].id;
+      arr.push({ label: `${firstId} hingga ${lastId}`, startIndex: i, endIndex: i + size - 1, slice });
+    }
+    return arr;
+  }, [cattleData]);
+
+  // Auto-generate next ID by finding the highest existing numeric ID
+  const generatedId = useMemo(() => {
+    if (!cattleData || cattleData.length === 0) return 'ID-001';
+    const maxNum = cattleData.reduce((max, c) => {
+      const match = c.id.match(/\d+/);
+      const num = match ? parseInt(match[0]) : 0;
+      return num > max ? num : max;
+    }, 0);
+    return `ID-${String(maxNum + 1).padStart(3, '0')}`;
+  }, [cattleData]);
+
+  // Handle boundary state when cattleData changes (e.g. gets deleted)
+  useEffect(() => {
+    if (currentBatchIndex >= batches.length && batches.length > 0) {
+      setCurrentBatchIndex(batches.length - 1);
+    }
+  }, [batches.length, currentBatchIndex]);
+
+  const cattlePositions = useMemo(() => {
+    if (batches.length === 0) return [];
+    // Protect against out-of-bounds
+    const activeBatch = batches[currentBatchIndex] || batches[0];
+    return activeBatch.slice.map((c, i) => ({
+      id: c.id,
+      position: 5 + (i * (90 / Math.max(1, activeBatch.slice.length - 1)))
+    }));
+  }, [batches, currentBatchIndex]);
+
+  const [newCattleName, setNewCattleName] = useState("");
+  const [newCattleGender, setNewCattleGender] = useState<"Jantan" | "Betina">("Betina");
+  const [newCattleBreed, setNewCattleBreed] = useState("Brahman Cross");
+  const [newCattleAgeYear, setNewCattleAgeYear] = useState("");
+  const [newCattleAgeMonth, setNewCattleAgeMonth] = useState("");
+  const [newCattleAgeDay, setNewCattleAgeDay] = useState("");
   const [newRumiSyncSerial, setNewRumiSyncSerial] = useState("");
   const [isScanning, setIsScanning] = useState(false);
 
+  // Tab 1 Log State
+  const [logs, setLogs] = useState(initialMaintenanceLogs);
+  const [calibratingId, setCalibratingId] = useState<number | null>(null);
+
   useEffect(() => {
+    if (cattlePositions.length === 0) return;
+
     const interval = setInterval(() => {
       setCurrentCattleIndex((prev) => {
-        let next = prev + direction;
-        let newDirection = direction;
+        let next = prev + 1; // Always move right (sequential scan)
 
-        if (next >= cattlePositions.length - 1) {
-          next = cattlePositions.length - 1;
-          newDirection = -1;
-        } else if (next <= 0) {
-          next = 0;
-          newDirection = 1;
+        if (next >= cattlePositions.length) {
+          next = 0; // Reset scanner
+
+          // Auto-sweep jump to next batch when reaching edge!
+          setCurrentBatchIndex(prevBatch => (prevBatch + 1) % batches.length);
         }
 
-        setDirection(newDirection);
         return next;
       });
-    }, 3000);
-
+    }, 2500); // Tweak speed if desired
     return () => clearInterval(interval);
-  }, [direction]);
+  }, [cattlePositions.length, batches.length]);
 
   useEffect(() => {
-    setDevicePosition(cattlePositions[currentCattleIndex].position);
-  }, [currentCattleIndex]);
+    if (cattlePositions.length > 0 && currentCattleIndex < cattlePositions.length) {
+      setDevicePosition(cattlePositions[currentCattleIndex].position);
+    } else {
+      // safe fallback if index is temporarily out of sync when batches array length switches
+      setDevicePosition(0);
+      setCurrentCattleIndex(0);
+    }
+  }, [currentCattleIndex, cattlePositions]);
 
   const getSignalColor = (rssi: number) => {
-    if (rssi > -50) return "text-green-600";
-    if (rssi > -65) return "text-yellow-600";
-    return "text-orange-600";
+    if (rssi > -50) return "text-[#4c7766]";
+    if (rssi > -65) return "text-[#d97706]";
+    return "text-[#c25944]";
   };
 
   const getSignalBars = (rssi: number) => {
@@ -86,80 +142,141 @@ export function SystemControl() {
 
   const handleScanBluetooth = () => {
     setIsScanning(true);
-    toast.loading("Memindai iTag Bluetooth...");
+    toast.loading("Memindai iTag Bluetooth...", { style: { minHeight: '64px', fontSize: '16px' } });
     setTimeout(() => {
       setIsScanning(false);
       toast.success("Scan Selesai!", {
-        description: "Ditemukan 3 iTag baru di sekitarnya"
+        description: "Ditemukan iTag baru. Anda dapat mengisi form.",
+        style: { minHeight: '64px', fontSize: '16px' }
       });
-    }, 3000);
+    }, 2000);
   };
 
   const handleSaveCattle = () => {
-    if (!newCattleId.trim()) {
-      toast.error("ID Sapi tidak boleh kosong");
+    if (!newCattleName.trim() || !newCattleAgeYear || !newCattleAgeMonth || !newCattleAgeDay) {
+      toast.error("Gagal Menyimpan", {
+        description: "Semua kolom form Sapi (termasuk Hari) harus terisi dengan lengkap.",
+        style: { minHeight: '56px' }
+      });
       return;
     }
-    toast.success("Sapi berhasil didaftarkan!", {
-      description: `${newCattleId} (${newCattleGender}, ${newCattleAge})`
+
+    if (cattleData.some(c => c.name.toLowerCase() === newCattleName.toLowerCase().trim())) {
+      toast.error("Nama Sapi Duplikat", { description: "Nama tersebut sudah terpakai." }); return;
+    }
+
+    const yearParsed = parseInt(newCattleAgeYear) || 0;
+    const monthParsed = parseInt(newCattleAgeMonth) || 0;
+    const dayParsed = parseInt(newCattleAgeDay) || 0;
+
+    if (yearParsed > 25) {
+      toast.error("Validasi Umur Gagal", { description: "Tahun maksimal yang diizinkan adalah 25." }); return;
+    }
+    if (monthParsed > 12) {
+      toast.error("Validasi Umur Gagal", { description: "Bulan tidak boleh lebih dari 12." }); return;
+    }
+    if (dayParsed > 30) {
+      toast.error("Validasi Umur Gagal", { description: "Hari tidak boleh lebih dari 30." }); return;
+    }
+
+    // Push new cow to context
+    const newCow: CattleData = {
+      id: generatedId,
+      name: newCattleName,
+      breed: newCattleBreed,
+      temp: "38.5", // default normal
+      chewing: "60x/menit",
+      status: "normal",
+      health: 100,
+      age: { year: yearParsed, month: monthParsed, day: dayParsed },
+      gender: newCattleGender,
+      methaneLevel: 100,
+      rumination: {
+        status: "Kunyahan Normal & Aktif",
+        frequency: "60x/mnt",
+        duration: "3.5 detik",
+        intensity: "Sedang",
+        metanePotential: "Kategori Normal",
+        feedType: "Rumput Segar",
+        recommendation: "Pakan optimal, pertahankan racikan saat ini.",
+        targetMethane: "100g → 90g/hari",
+        feedBoost: "+5%",
+        ruminalHealth: "Sangat Optimal"
+      }
+    };
+
+    addCattle(newCow);
+
+    toast.success("Sapi berhasil ditambahkan!", {
+      description: `${generatedId} terdaftar di sistem pusat.`,
+      style: { minHeight: '64px', fontSize: '16px' }
     });
-    setNewCattleId("");
-    setNewCattleGender("Betina");
-    setNewCattleAge("");
+
+    // Reset Form
+    setNewCattleName("");
+    setNewCattleAgeYear("");
+    setNewCattleAgeMonth("");
+    setNewCattleAgeDay("");
   };
 
   const handleAddRumiSync = () => {
     if (!newRumiSyncSerial.trim()) {
-      toast.error("Serial Number / QR Code tidak boleh kosong");
+      toast.error("Serial Number / QR Code kosong", { style: { minHeight: '56px' } });
       return;
     }
-    toast.success("RUMI-SYNC berhasil didaftarkan!", {
-      description: `Serial: ${newRumiSyncSerial}`
-    });
+    toast.success("Scanner RUMI-SYNC berhasil didaftarkan!", { style: { minHeight: '64px', fontSize: '16px' } });
     setNewRumiSyncSerial("");
   };
 
+  const handleCalibrate = (logId: number) => {
+    setCalibratingId(logId);
+    setTimeout(() => {
+      setLogs(prev => prev.map(l => l.id === logId ? { ...l, resolvable: false, event: `${l.event} (Terkalibrasi Kembali ⚡)` } : l));
+      setCalibratingId(null);
+      toast.success("Kalibrasi Berhasil, Jaringan Sinyal Pulih!");
+    }, 1500);
+  };
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-8 space-y-4 sm:space-y-8 max-w-7xl mx-auto pb-24 md:pb-8">
       {/* Header */}
-      <div className="text-center">
-        <h1 className="text-3xl text-gray-800 mb-2">Kontrol Sistem & Monitoring</h1>
-        <p className="text-gray-600">Manajemen Hardware & Sinkronisasi Data</p>
+      <div className="text-center md:text-left flex flex-col md:flex-row items-center md:items-start gap-3 md:gap-4 mb-4 sm:mb-8">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#4c7766] rounded-xl flex items-center justify-center shadow-lg text-white shrink-0">
+          <Settings className="w-5 h-5 sm:w-7 sm:h-7" />
+        </div>
+        <div>
+          <h1 className="text-2xl sm:text-4xl font-bold text-[#2d3a33] mb-0.5 sm:mb-1">Kontrol Sistem</h1>
+          <p className="text-xs sm:text-base text-[#6b7280]">Manajemen Hardware RUMI-SYNC & Sinkronisasi</p>
+        </div>
       </div>
 
-      {/* Tab Navigation - Diubah warna aktifnya ke Hijau */}
-      <div className="flex gap-2 bg-white rounded-lg shadow-md p-1 w-fit mx-auto">
-        <motion.button
+      {/* Tab Navigation */}
+      <div className="flex gap-2 sm:gap-4 bg-[#fcfbf9] rounded-xl sm:rounded-2xl shadow-sm border border-[#e2e8e4] p-1.5 sm:p-2 w-full md:w-fit mx-auto md:mx-0 justify-center">
+        <button
           onClick={() => setActiveTab("live-monitor")}
-          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-            activeTab === "live-monitor"
-              ? "bg-green-600 text-white shadow-md"
-              : "text-gray-600 hover:text-gray-800"
-          }`}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          className={`flex-1 sm:flex-none px-4 py-3 sm:px-6 sm:py-4 rounded-lg sm:rounded-xl font-bold transition-all min-h-[48px] sm:min-h-[56px] text-xs sm:text-base ${activeTab === "live-monitor"
+              ? "bg-[#4c7766] text-white shadow-md"
+              : "text-[#6b7280] hover:bg-[#e2e8e4] hover:text-[#2d3a33]"
+            }`}
         >
-          <div className="flex items-center gap-2">
-            <Radio className="w-5 h-5" />
-            <span>Live Monitor</span>
+          <div className="flex items-center justify-center gap-2">
+            <Radio className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>Monitor Sistem</span>
           </div>
-        </motion.button>
+        </button>
 
-        <motion.button
+        <button
           onClick={() => setActiveTab("add-data")}
-          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-            activeTab === "add-data"
-              ? "bg-green-600 text-white shadow-md"
-              : "text-gray-600 hover:text-gray-800"
-          }`}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          className={`flex-1 sm:flex-none px-4 py-3 sm:px-6 sm:py-4 rounded-lg sm:rounded-xl font-bold transition-all min-h-[48px] sm:min-h-[56px] text-xs sm:text-base ${activeTab === "add-data"
+              ? "bg-[#4c7766] text-white shadow-md"
+              : "text-[#6b7280] hover:bg-[#e2e8e4] hover:text-[#2d3a33]"
+            }`}
         >
-          <div className="flex items-center gap-2">
-            <Plus className="w-5 h-5" />
-            <span>Tambah Data</span>
+          <div className="flex items-center justify-center gap-2">
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>Tambah Data Sapi</span>
           </div>
-        </motion.button>
+        </button>
       </div>
 
       {/* TAB 1: Live Monitor */}
@@ -167,43 +284,60 @@ export function SystemControl() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
+          className="space-y-4 sm:space-y-8"
         >
-          {/* Live Tracker Rel - Diubah ke Tema Hijau */}
+          {/* Tracker Rel */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-xl shadow-lg p-6"
+            className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-[#e2e8e4] p-4 sm:p-8"
           >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <Radio className="w-5 h-5 text-green-600" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-14 sm:h-14 bg-[#f4f5f2] rounded-xl sm:rounded-2xl flex items-center justify-center">
+                  <Radio className="w-5 h-5 sm:w-7 sm:h-7 text-[#4c7766]" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-2xl font-bold text-[#2d3a33]">Tracker Rel Aktif</h2>
+                  <p className="text-[11px] sm:text-sm text-[#6b7280]">Posisi kamera dan scanner RUMI-SYNC berjalan</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl text-gray-800">Live Tracker Rel</h2>
-                <p className="text-sm text-gray-500">Posisi RUMI-SYNC Real-Time</p>
+
+              <div className="w-full sm:w-auto bg-[#f4f5f2] border-2 border-[#6b8e7b]/50 hover:border-[#4c7766] px-4 py-2 sm:px-5 sm:py-3 rounded-2xl shadow-sm relative group cursor-pointer transition-colors flex flex-col justify-center min-w-[220px]">
+                <div className="text-[10px] sm:text-xs font-bold text-[#6b8e7b] mb-0.5">Fokus Analisis Area:</div>
+                <select
+                  value={currentBatchIndex}
+                  onChange={(e) => {
+                    setCurrentBatchIndex(parseInt(e.target.value));
+                    setCurrentCattleIndex(0); // reset scanner position when jumping manually
+                  }}
+                  className="w-full bg-transparent font-semibold text-[#2d3a33] focus:outline-none cursor-pointer pr-8 text-sm sm:text-base appearance-none relative z-10"
+                >
+                  {batches.map((b, i) => (
+                    <option key={i} value={i}>{b.label}</option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 transform -translate-y-[10%] pointer-events-none opacity-70 group-hover:opacity-100 transition-opacity">
+                  <svg className="w-5 h-5 text-[#4c7766]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-8">
-              <div className="relative h-32">
-                <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-300 rounded-full transform -translate-y-1/2">
-                  <div className="absolute -top-1 -bottom-1 left-0 right-0 bg-gradient-to-r from-gray-400 via-gray-300 to-gray-400 rounded-full opacity-50"></div>
+            <div className="bg-[#fcfbf9] border border-[#e2e8e4] rounded-xl sm:rounded-2xl p-4 sm:p-10">
+              <div className="relative h-28 sm:h-48 my-4">
+                <div className="absolute top-1/2 left-0 right-0 h-4 bg-[#e2e8e4] rounded-full transform -translate-y-1/2 shadow-inner">
+                  <div className="absolute top-1 bottom-1 left-1 right-1 bg-[#f4f5f2] rounded-full"></div>
                 </div>
 
                 {cattlePositions.map((cattle, index) => (
                   <div
                     key={cattle.id}
-                    className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2"
+                    className="absolute top-1/2 transform -translate-y-[120%] -translate-x-1/2"
                     style={{ left: `${cattle.position}%` }}
                   >
                     <div className="flex flex-col items-center">
-                      <div className={`text-2xl transition-transform ${currentCattleIndex === index ? 'scale-125' : ''}`}>
-                        🐄
-                      </div>
-                      <div className={`text-xs mt-1 px-2 py-0.5 rounded ${
-                        currentCattleIndex === index ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'
-                      }`}>
+                      <div className={`text-2xl sm:text-4xl transition-transform ${currentCattleIndex === index ? 'scale-125 drop-shadow-md' : 'grayscale opacity-60'}`}>🐄</div>
+                      <div className={`text-[8px] sm:text-xs mt-1 px-1.5 py-0.5 rounded-full font-bold shadow-sm whitespace-nowrap ${currentCattleIndex === index ? 'bg-[#4c7766] text-white' : 'bg-[#f4f5f2] text-[#6b7280] border border-[#e2e8e4]'}`}>
                         {cattle.id}
                       </div>
                     </div>
@@ -211,145 +345,119 @@ export function SystemControl() {
                 ))}
 
                 <motion.div
-                  className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2"
+                  className="absolute top-1/2 transform translate-y-[20%] -translate-x-1/2 z-10"
                   animate={{ left: `${devicePosition}%` }}
                   transition={{ duration: 2, ease: "easeInOut" }}
                 >
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-lime-400 to-green-500 rounded-lg shadow-lg flex items-center justify-center text-white text-xs rotate-45">
-                      <span className="-rotate-45">📡</span>
+                  <div className="flex flex-col items-center drop-shadow-lg">
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 bg-[#4c7766] border-2 sm:border-4 border-white rounded-lg sm:rounded-xl flex items-center justify-center text-white text-[10px] sm:text-xs rotate-45 relative overflow-hidden shadow-lg">
+                      <div className="absolute -inset-2 bg-white/20 blur-sm rotate-45 translate-x-1 translate-y-1"></div>
+                      <span className="-rotate-45 block">📡</span>
                     </div>
-                    <div className="mt-2 px-2 py-1 bg-green-600 text-white text-xs rounded shadow-md">
-                      RUMI-SYNC
-                    </div>
+                    <div className="mt-1 sm:mt-2 px-2 py-0.5 sm:py-1 bg-[#2d3a33] text-white text-[9px] sm:text-[10px] font-bold rounded-md sm:rounded-lg shadow-md whitespace-nowrap">Scanner</div>
                   </div>
                 </motion.div>
               </div>
 
-              <div className="mt-6 text-center">
-                <div className="inline-flex items-center gap-2 bg-green-50 px-4 py-2 rounded-full border border-green-100">
-                  <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-green-900">
-                    Sedang memindai: <span className="font-semibold">{cattlePositions[currentCattleIndex].id}</span>
+              <div className="mt-6 sm:mt-8 text-center">
+                <div className="inline-flex items-center gap-2 sm:gap-3 bg-[#e2e8e4] px-4 py-2 sm:py-3 rounded-full shadow-sm max-w-full overflow-hidden">
+                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-[#4c7766] rounded-full animate-pulse shadow-[0_0_8px_rgba(76,119,102,0.8)] shrink-0"></div>
+                  <span className="text-xs sm:text-sm font-semibold text-[#2d3a33] truncate">
+                    Menganalisis: <span className="font-bold text-[#4c7766] bg-white px-2 py-0.5 rounded-md ml-1">{cattlePositions[currentCattleIndex]?.id || "..."}</span>
                   </span>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* RSSI Debugger - Tema Hijau Limau */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+            {/* RSSI Debugger */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white rounded-xl shadow-md overflow-hidden"
+              className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-[#e2e8e4] overflow-hidden flex flex-col"
             >
-              <div className="bg-gradient-to-r from-lime-500 to-green-600 text-white px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <Signal className="w-6 h-6" />
+              <div className="bg-[#fcfbf9] border-b border-[#e2e8e4] px-4 sm:px-8 py-4 sm:py-5">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2.5 sm:p-3 bg-[#e2e8e4] rounded-xl text-[#4c7766]"><Signal className="w-5 h-5 sm:w-6 sm:h-6" /></div>
                   <div>
-                    <h3 className="text-xl">Sinyal Sapi (RSSI Debugger)</h3>
-                    <p className="text-sm text-green-50">Kekuatan Sinyal iTag Bluetooth</p>
+                    <h3 className="text-lg sm:text-xl font-bold text-[#2d3a33]">Sinyal (RSSI)</h3>
+                    <p className="text-[11px] sm:text-sm text-[#6b7280]">Ping transmitor iTag</p>
                   </div>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
+              <div className="overflow-x-auto flex-1 pb-4">
+                <table className="w-full text-xs sm:text-base">
+                  <thead className="bg-[#f4f5f2] border-b border-[#e2e8e4]">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs text-gray-600 uppercase">ID Sapi</th>
-                      <th className="px-4 py-3 text-left text-xs text-gray-600 uppercase">MAC Address</th>
-                      <th className="px-4 py-3 text-left text-xs text-gray-600 uppercase">RSSI (dBm)</th>
-                      <th className="px-4 py-3 text-left text-xs text-gray-600 uppercase">Status</th>
+                      <th className="px-5 py-3 sm:py-4 text-center text-[10px] sm:text-xs font-bold text-[#6b8e7b] uppercase">ID Sapi</th>
+                      <th className="px-5 py-3 sm:py-4 text-center text-[10px] sm:text-xs font-bold text-[#6b8e7b] uppercase">Sinyal</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-[#f4f5f2]">
                     {iTagData.map((tag, index) => (
-                      <motion.tr
-                        key={tag.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="hover:bg-gray-50"
-                      >
-                        <td className="px-4 py-3 text-sm text-gray-900">{tag.id}</td>
-                        <td className="px-4 py-3 text-xs text-gray-500 font-mono">{tag.mac}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-end gap-2">
-                            <span className={`text-sm font-bold min-w-fit ${getSignalColor(tag.rssi)}`}>
-                              {tag.rssi}
-                            </span>
-                            <div className="flex items-end gap-0.5 pb-0.5">
+                      <motion.tr key={tag.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="hover:bg-[#fcfbf9]">
+                        <td className="px-5 py-3 sm:py-4 font-bold text-[#2d3a33] text-center">{tag.id}</td>
+                        <td className="px-5 py-3 sm:py-4">
+                          <div className="flex items-center justify-center gap-2 sm:gap-3">
+                            <span className={`text-xs sm:text-sm font-bold w-6 sm:w-8 text-right ${getSignalColor(tag.rssi)}`}>{tag.rssi}</span>
+                            <div className="flex items-end gap-[2px] sm:gap-1 h-3 sm:h-4">
                               {[1, 2, 3, 4].map((bar) => (
-                                <div
-                                  key={bar}
-                                  className={`w-1 ${
-                                    bar <= getSignalBars(tag.rssi)
-                                      ? getSignalColor(tag.rssi).replace('text-', 'bg-')
-                                      : 'bg-gray-300'
-                                  }`}
-                                  style={{ height: `${bar * 3}px` }}
-                                ></div>
+                                <div key={bar} className={`w-1 sm:w-1.5 rounded-sm ${bar <= getSignalBars(tag.rssi) ? getSignalColor(tag.rssi).replace('text-', 'bg-') : 'bg-[#e2e8e4]'}`} style={{ height: `${bar * 3.5}px` }}></div>
                               ))}
                             </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            tag.status === "Sangat Kuat" ? "bg-green-100 text-green-800" :
-                            tag.status === "Kuat" ? "bg-yellow-100 text-yellow-800" :
-                            "bg-orange-100 text-orange-800"
-                          }`}>
-                            {tag.status}
-                          </span>
                         </td>
                       </motion.tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-
-              <div className="bg-green-50 border-t border-green-100 px-6 py-3">
-                <div className="flex items-center gap-2 text-sm text-green-900">
-                  <span className="text-lg">🛡️</span>
-                  <span>Sistem otomatis menyaring data berdasarkan RSSI untuk mencegah data tertukar</span>
-                </div>
-              </div>
             </motion.div>
 
-            {/* Activity Logs - Tema Hijau Zamrud */}
+            {/* Activity Logs with Resolvers */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="bg-white rounded-xl shadow-md overflow-hidden"
+              className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-[#e2e8e4] overflow-hidden flex flex-col"
             >
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <RefreshCw className="w-6 h-6" />
+              <div className="bg-[#fcfbf9] border-b border-[#e2e8e4] px-4 sm:px-8 py-4 sm:py-5">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2.5 sm:p-3 bg-[#e2e8e4] rounded-xl text-[#4c7766]"><RefreshCw className="w-5 h-5 sm:w-6 sm:h-6" /></div>
                   <div>
-                    <h3 className="text-xl">Log Aktivitas RUMI-SYNC</h3>
-                    <p className="text-sm text-green-100">Rekam kejadian sistem real-time</p>
+                    <h3 className="text-lg sm:text-xl font-bold text-[#2d3a33]">Log Sistem (Live)</h3>
+                    <p className="text-[11px] sm:text-sm text-[#6b7280]">Insiden & Sinkronisasi</p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-6">
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {maintenanceLogs.map((log, index) => (
-                    <div key={index} className="flex items-start gap-3 p-3 bg-gradient-to-r from-green-50 to-lime-50 rounded-lg hover:from-green-100 hover:to-lime-100 transition-colors border-l-4 border-green-500">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm">
-                        {log.type === "scan" && <Radio className="w-4 h-4 text-green-600" />}
-                        {log.type === "connection" && <Bluetooth className="w-4 h-4 text-emerald-600" />}
-                        {log.type === "sync" && <RefreshCw className="w-4 h-4 text-teal-600" />}
-                        {log.type === "calibration" && <RefreshCw className="w-4 h-4 text-lime-600" />}
-                        {log.type === "update" && <Zap className="w-4 h-4 text-yellow-500" />}
+              <div className="p-4 sm:p-6 flex-1 bg-white">
+                <div className="space-y-3 sm:space-y-4 max-h-[300px] sm:max-h-[380px] overflow-y-auto pr-2">
+                  {logs.map((log, index) => (
+                    <div key={log.id} className={`flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-colors ${log.type === 'error' && log.resolvable ? 'bg-[#fff5f5] border-[#fca5a5]/30' : 'bg-[#fdfbf7] border-transparent hover:border-[#e2e8e4]'}`}>
+                      <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center bg-white shadow-sm border border-[#e2e8e4]">
+                        {log.type === "scan" && <Radio className="w-4 h-4 sm:w-5 sm:h-5 text-[#4c7766]" />}
+                        {log.type === "error" && <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-[#c25944]" />}
+                        {log.type === "connection" && <Bluetooth className="w-4 h-4 sm:w-5 sm:h-5 text-[#6b8e7b]" />}
+                        {log.type === "sync" && <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-[#d97706]" />}
+                        {log.type === "calibration" && <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-[#4c7766]" />}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-800">{log.event}</div>
-                        <div className="text-xs text-gray-500 mt-1">{log.date}</div>
+                      <div className="flex-1 min-w-0 pt-0.5">
+                        <div className="text-[13px] sm:text-sm font-bold text-[#2d3a33] leading-tight">{log.event}</div>
+                        <div className="text-[10px] sm:text-xs font-semibold text-[#6b8e7b] mt-1">{log.date}</div>
+                        {log.type === "error" && log.resolvable && (
+                          <button
+                            onClick={() => handleCalibrate(log.id)}
+                            disabled={calibratingId === log.id}
+                            className="mt-2.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-[#c25944] text-white text-[10px] sm:text-xs font-bold rounded-lg sm:rounded-xl shadow-sm hover:bg-[#a64835] transition-colors flex items-center gap-1.5"
+                          >
+                            {calibratingId === log.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                            Kalibrasi Ulang
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -360,63 +468,74 @@ export function SystemControl() {
         </motion.div>
       )}
 
-      {/* TAB 2: Tambah Data - Warna Diselaraskan dengan Skema Hijau/Lime */}
+      {/* TAB 2: Tambah Data - Fat Finger Form */}
       {activeTab === "add-data" && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-6"
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8"
         >
           {/* Card 1: Daftar Sapi Baru */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white rounded-xl shadow-lg overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-lime-500 to-green-600 text-white px-6 py-4">
-              <div className="flex items-center gap-3">
-                <Bluetooth className="w-6 h-6" />
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-[#e2e8e4] overflow-hidden">
+            <div className="bg-[#fcfbf9] border-b border-[#e2e8e4] px-4 sm:px-8 py-4 sm:py-6">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="p-2 sm:p-3 bg-[#e2e8e4] rounded-xl text-[#4c7766]"><Plus className="w-5 h-5 sm:w-6 sm:h-6" /></div>
                 <div>
-                  <h3 className="text-xl font-semibold">Daftar Sapi Baru</h3>
-                  <p className="text-sm text-green-50">Pairing iTag Bluetooth</p>
+                  <h3 className="text-lg sm:text-xl font-bold text-[#2d3a33]">Pendaftaran Sapi</h3>
+                  <p className="text-[11px] sm:text-sm text-[#6b7280]">Sambungkan iTag ke entitas sapi</p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-8 space-y-4 sm:space-y-5">
+              <button
+                onClick={handleScanBluetooth}
+                disabled={isScanning}
+                className="w-full bg-[#f4f5f2] text-[#4c7766] py-3.5 px-6 rounded-xl sm:rounded-2xl hover:bg-[#e2e8e4] transition-all font-bold min-h-[48px] sm:min-h-[56px] flex items-center justify-center gap-2 sm:gap-3 border border-[#c1d1c8]"
+              >
+                {isScanning ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#4c7766] border-t-transparent"></div> : <Bluetooth className="w-4 h-4 sm:w-5 sm:h-5 text-[#4c7766]" />}
+                <span className="text-sm sm:text-base">{isScanning ? "Mencari iTag di sekitar..." : "Pindai iTag Bluetooth"}</span>
+              </button>
+
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-xs sm:text-sm font-bold text-[#2d3a33] mb-1.5 sm:mb-2">ID Register (Otomatis)</label>
+                  <input
+                    type="text"
+                    value={generatedId}
+                    disabled
+                    className="w-full px-3 py-3 sm:px-4 sm:py-3.5 min-h-[48px] sm:min-h-[56px] bg-[#e2e8e4] text-[#818a7a] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl cursor-not-allowed font-bold text-sm sm:text-lg"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-xs sm:text-sm font-bold text-[#2d3a33] mb-1.5 sm:mb-2">Nama Relatif</label>
+                  <input
+                    type="text"
+                    value={newCattleName}
+                    onChange={(e) => setNewCattleName(e.target.value)}
+                    placeholder="Sapi Lokal - 025"
+                    className="w-full px-3 py-3 sm:px-4 sm:py-3.5 min-h-[48px] sm:min-h-[56px] bg-[#fcfbf9] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-[#4c7766] transition-all font-bold text-sm sm:text-lg"
+                  />
+                </div>
+              </div>
+
               <div>
-                <button
-                  onClick={handleScanBluetooth}
-                  disabled={isScanning}
-                  className="w-full bg-gradient-to-r from-lime-500 to-green-600 text-white py-3 rounded-lg hover:from-lime-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+                <label className="block text-xs sm:text-sm font-bold text-[#2d3a33] mb-1.5 sm:mb-2">Ras Sapi (Breed)</label>
+                <select
+                  value={newCattleBreed}
+                  onChange={(e) => setNewCattleBreed(e.target.value)}
+                  className="w-full px-3 py-3 sm:px-4 sm:py-3.5 min-h-[48px] sm:min-h-[56px] bg-[#fcfbf9] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-[#4c7766] transition-all font-bold text-sm sm:text-lg appearance-none"
                 >
-                  {isScanning ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  ) : (
-                    <Bluetooth className="w-5 h-5" />
-                  )}
-                  <span>{isScanning ? "Sedang Memindai..." : "Scan Bluetooth"}</span>
-                </button>
+                  {cattleBreedsList.map(breed => <option key={breed} value={breed}>{breed}</option>)}
+                </select>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">ID Sapi</label>
-                <input
-                  type="text"
-                  value={newCattleId}
-                  onChange={(e) => setNewCattleId(e.target.value)}
-                  placeholder="Contoh: ID-025"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Jenis Kelamin</label>
+                <label className="block text-xs sm:text-sm font-bold text-[#2d3a33] mb-1.5 sm:mb-2">Jenis Kelamin</label>
                 <select
                   value={newCattleGender}
-                  onChange={(e) => setNewCattleGender(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  onChange={(e) => setNewCattleGender(e.target.value as "Jantan" | "Betina")}
+                  className="w-full px-3 py-3 sm:px-4 sm:py-3.5 min-h-[48px] sm:min-h-[56px] bg-[#fcfbf9] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-[#4c7766] transition-all font-bold text-sm sm:text-lg appearance-none"
                 >
                   <option value="Betina">Betina</option>
                   <option value="Jantan">Jantan</option>
@@ -424,79 +543,74 @@ export function SystemControl() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Umur (Tahun-Bulan-Hari)</label>
-                <input
-                  type="text"
-                  value={newCattleAge}
-                  onChange={(e) => setNewCattleAge(e.target.value)}
-                  placeholder="Contoh: 2-5-15"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                <label className="block text-xs sm:text-sm font-bold text-[#2d3a33] mb-1.5 sm:mb-2">Usia Akumulatif</label>
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                  <input
+                    type="number"
+                    value={newCattleAgeYear}
+                    onChange={(e) => setNewCattleAgeYear(e.target.value)}
+                    placeholder="Tahun"
+                    className="w-full px-2 py-3 sm:px-4 sm:py-3.5 min-h-[48px] sm:min-h-[56px] bg-[#fcfbf9] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-[#4c7766] transition-all font-bold text-[13px] sm:text-lg text-center"
+                  />
+                  <input
+                    type="number"
+                    value={newCattleAgeMonth}
+                    onChange={(e) => setNewCattleAgeMonth(e.target.value)}
+                    placeholder="Bulan"
+                    className="w-full px-2 py-3 sm:px-4 sm:py-3.5 min-h-[48px] sm:min-h-[56px] bg-[#fcfbf9] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-[#4c7766] transition-all font-bold text-[13px] sm:text-lg text-center"
+                  />
+                  <input
+                    type="number"
+                    value={newCattleAgeDay}
+                    onChange={(e) => setNewCattleAgeDay(e.target.value)}
+                    placeholder="Hari"
+                    className="w-full px-2 py-3 sm:px-4 sm:py-3.5 min-h-[48px] sm:min-h-[56px] bg-[#fcfbf9] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-[#4c7766] transition-all font-bold text-[13px] sm:text-lg text-center"
+                  />
+                </div>
               </div>
 
-              <button
-                onClick={handleSaveCattle}
-                className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg active:scale-95 font-semibold flex items-center justify-center gap-2"
-              >
-                <span>💾</span>
-                <span>Simpan Sapi</span>
-              </button>
+              <div className="pt-2">
+                <button
+                  onClick={handleSaveCattle}
+                  className="w-full bg-[#4c7766] text-white py-3.5 sm:py-4 px-6 rounded-xl sm:rounded-2xl hover:bg-[#3f6355] transition-all font-bold min-h-[56px] sm:min-h-[64px] flex items-center justify-center gap-2 sm:gap-3 shadow-md text-sm sm:text-lg"
+                >
+                  💾 Tambahkan ke Database Pusat
+                </button>
+              </div>
             </div>
-          </motion.div>
+          </div>
 
-          {/* Card 2: Tambah RUMI-SYNC Baru */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white rounded-xl shadow-lg overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-4">
-              <div className="flex items-center gap-3">
-                <QrCode className="w-6 h-6" />
+          {/* Card 2: Mesin Scanner Baru */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-[#e2e8e4] overflow-hidden flex flex-col justify-start pb-4 sm:pb-6">
+            <div className="bg-[#fcfbf9] border-b border-[#e2e8e4] px-4 sm:px-8 py-4 sm:py-6">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="p-2 sm:p-3 bg-[#e2e8e4] rounded-xl text-[#4c7766]"><QrCode className="w-5 h-5 sm:w-6 sm:h-6" /></div>
                 <div>
-                  <h3 className="text-xl font-semibold">Tambah RUMI-SYNC Baru</h3>
-                  <p className="text-sm text-green-100">Daftarkan Box RUMI-SYNC</p>
+                  <h3 className="text-lg sm:text-xl font-bold text-[#2d3a33]">Mesin Scanner Baru</h3>
+                  <p className="text-[11px] sm:text-sm text-[#6b7280]">Registrasi radar sensor pakan</p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Serial Number / QR Code</label>
-                <div className="flex gap-2">
+                <label className="block text-xs sm:text-sm font-bold text-[#2d3a33] mb-1.5 sm:mb-2">QR Code Serial Number Box</label>
+                <div className="flex flex-col gap-2 sm:gap-3">
                   <input
                     type="text"
                     value={newRumiSyncSerial}
                     onChange={(e) => setNewRumiSyncSerial(e.target.value)}
-                    placeholder="Scan atau ketik serial..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Ketik SN manual..."
+                    className="w-full px-3 py-3 sm:px-4 sm:py-4 min-h-[48px] sm:min-h-[56px] bg-[#fcfbf9] border-2 border-[#e2e8e4] rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-[#4c7766] transition-all font-bold text-sm sm:text-lg"
                   />
-                  <button className="bg-green-100 text-green-600 px-4 py-2 rounded-lg hover:bg-green-200 transition-colors">
-                    <QrCode className="w-5 h-5" />
+                  <button className="bg-[#2d3a33] text-white w-full py-3 sm:py-4 rounded-xl sm:rounded-2xl hover:bg-[#1a231f] transition-all shadow-sm font-bold flex items-center justify-center gap-2 text-sm sm:text-base">
+                    <QrCode className="w-4 h-4 sm:w-5 sm:h-5" /> Pindai Kode Melalui Kamera
                   </button>
                 </div>
               </div>
-
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex gap-3">
-                  <div className="text-2xl flex-shrink-0">ℹ️</div>
-                  <div className="text-sm text-green-900">
-                    <p className="font-semibold mb-1">Informasi Perangkat</p>
-                    <p className="text-xs text-green-700">Setiap RUMI-SYNC memiliki serial number unik di bagian belakang perangkat atau QR code label.</p>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleAddRumiSync}
-                className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg active:scale-95 font-semibold flex items-center justify-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Tambah Perangkat</span>
-              </button>
             </div>
-          </motion.div>
+          </div>
+
         </motion.div>
       )}
     </div>

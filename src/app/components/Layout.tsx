@@ -1,30 +1,32 @@
 import { useState, useEffect, useRef } from "react";
-import { Outlet, Link, useLocation } from "react-router";
-import { Home, Activity, Leaf, Settings, Bell, X } from "lucide-react";
+import { Outlet, Link, useLocation, useNavigate } from "react-router";
+import { Home, Activity, Leaf, Settings, Bell, X, Menu, CheckCircle2 } from "lucide-react";
 import { Toaster } from "./ui/sonner";
+import logoImg from '../../assets/logo.png';
+import { useCattle } from "../context/CattleContext";
 
-// Custom Battery Icon Component (Phone Style)
+// Custom Battery Icon Component (Solid Fill)
 const BatteryIndicator = ({ level }: { level: number }) => {
   const getColors = () => {
-    if (level > 20) return { fill: "#10b981", border: "border-gray-400" }; // green-500
-    if (level > 10) return { fill: "#f59e0b", border: "border-amber-400" }; // amber-500
-    return { fill: "#ef4444", border: "border-red-400" }; // red-500
+    if (level > 20) return { fill: "#4c7766", border: "border-rs-sage", icon: "bg-[#6b8e7b]" };
+    if (level > 10) return { fill: "#d97706", border: "border-amber-500", icon: "bg-amber-500" };
+    return { fill: "#c25944", border: "border-[#c25944]", icon: "bg-[#c25944]" };
   };
 
-  const { fill, border } = getColors();
+  const { fill, border, icon } = getColors();
 
   return (
-    <div className="flex items-center gap-1.5">
-      <div className={`relative w-8 h-4 border-2 ${border} rounded-[3px] p-[1px] flex items-center`}>
-        <div className="w-full h-full overflow-hidden rounded-[1px]">
+    <div className="flex items-center gap-1.5" title={`${Math.round(level)}% Battery`}>
+      <div className={`relative w-8 h-[16px] border-[2px] ${border} rounded-[4px] p-[1.5px] flex items-center bg-rs-card`}>
+        <div className="w-full h-full rounded-[1px] overflow-hidden flex justify-start">
           <div 
             className="h-full transition-all duration-1000 ease-in-out"
-            style={{ width: `${level}%`, backgroundColor: fill }}
+            style={{ width: `${level}%`, backgroundColor: fill, borderRadius: level === 100 ? '1px' : '1px 0 0 1px' }}
           />
         </div>
-        <div className={`absolute -right-[4px] top-1/2 -translate-y-1/2 w-[2px] h-1.5 ${border.replace('border-', 'bg-')} rounded-r-[1px]`} />
+        <div className={`absolute -right-[4px] top-1/2 -translate-y-1/2 w-[2.5px] h-[6px] ${icon} rounded-r-sm`} />
       </div>
-      <span className="text-xs sm:text-sm font-bold text-gray-700 min-w-[32px]">
+      <span className="text-xs sm:text-sm font-bold text-rs-text min-w-[33px]">
         {Math.round(level)}%
       </span>
     </div>
@@ -33,9 +35,13 @@ const BatteryIndicator = ({ level }: { level: number }) => {
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [batteryLevel, setBatteryLevel] = useState(40);
+  const [batteryLevel, setBatteryLevel] = useState(65);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+
+  const { notifications, markNotificationAsRead, setSelectedCattleId } = useCattle();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -56,107 +62,203 @@ export function Layout() {
 
   const isActive = (path: string) => path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
 
-  const notifications = [
-    { id: 1, type: "warning", message: "ID-007: Kunyahan menurun - Perlu pantauan", time: "10 menit lalu" },
-    { id: 2, type: "warning", message: "ID-014: Kunyahan menurun - Perlu pantauan", time: "25 menit lalu" },
-    { id: 3, type: "info", message: "RUMI-SYNC berhasil memindai 20 sapi", time: "1 jam lalu" },
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const handleNotificationClick = (notif: any) => {
+    markNotificationAsRead(notif.id);
+    if (notif.cattleId) {
+      setSelectedCattleId(notif.cattleId);
+      navigate("/medical");
+      setShowNotifications(false);
+    }
+  };
+
+  const navigationItems = [
+    { path: "/", icon: Home, label: "Beranda" },
+    { path: "/medical", icon: Activity, label: "Medis" },
+    { path: "/eco-nutrition", icon: Leaf, label: "Nutrisi" },
+    { path: "/system-control", icon: Settings, label: "Sistem" }
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col md:flex-row bg-rs-bg selection:bg-rs-primary selection:text-white overflow-hidden">
       <Toaster position="top-center" richColors />
-      {/* Top Bar - Diperbaiki layout responsive-nya */}
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
-        <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
-          {/* Ubah warna logo ke hijau */}
-          <div className="w-8 sm:w-10 h-8 sm:h-10 bg-gradient-to-br from-lime-400 to-green-500 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
-            <span className="text-lg sm:text-xl">🐄</span>
-          </div>
-          {/* Hapus 'hidden sm:block' agar tampil di HP */}
-          <div className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-green-600 to-lime-500 bg-clip-text text-transparent">
+      
+      {/* Sidebar for Tablet (md) and Desktop (lg) */}
+      <aside className="hidden md:flex flex-col bg-rs-card border-r border-rs-border shadow-sm z-30 transition-all duration-300 w-24 lg:w-72">
+        <div className="p-4 lg:p-6 border-b border-rs-border flex items-center justify-center lg:justify-start gap-4">
+          <Link to="/" className="w-14 h-14 flex items-center justify-center flex-shrink-0 bg-rs-sage-light rounded-xl overflow-hidden p-1.5 hover:scale-105 transition-transform">
+            <img src={logoImg} alt="RumiSync Logo" className="w-full h-full object-contain drop-shadow-sm scale-110" />
+          </Link>
+          <Link to="/" className="hidden lg:block text-2xl font-black text-rs-primary tracking-tight hover:opacity-80 transition-opacity">
             RUMI-SYNC
-          </div>
-        </Link>
+          </Link>
+        </div>
+        
+        <div className="flex-1 py-8 flex flex-col gap-3 px-3 lg:px-4">
+          {navigationItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <Link 
+                key={item.path} 
+                to={item.path} 
+                className={`flex items-center lg:justify-start justify-center gap-4 px-3 lg:px-5 py-4 rounded-2xl transition-all font-bold min-h-[56px] group ${
+                  active 
+                    ? "bg-rs-border text-rs-primary shadow-[inset_4px_0_0_#4c7766]" 
+                    : "text-rs-muted hover:bg-rs-sage-light hover:text-rs-primary"
+                }`}
+              >
+                <item.icon className={`w-7 h-7 flex-shrink-0 transition-transform group-hover:scale-110 ${active ? "fill-[#4c7766]/20" : ""}`} />
+                <span className="hidden lg:block text-[17px]">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
 
-        {/* Digabungkan antara mobile & desktop agar Notifikasi berfungsi di keduanya */}
-        <div className="flex items-center gap-3 sm:gap-6">
-          <div className="hidden sm:flex items-center gap-2">
-            <span className="text-green-500 text-xl">🟢</span>
-            <span className="text-sm">Online</span>
-          </div>
+        <div className="p-4 border-t border-rs-border flex justify-center lg:justify-start items-center gap-3">
           <BatteryIndicator level={batteryLevel} />
-          
-          <div className="relative" ref={notificationRef}>
-            <button
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <Bell className="w-5 h-5 text-gray-600" />
-              {notifications.length > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-              )}
-            </button>
+          <div className="hidden lg:block text-xs font-bold text-rs-muted">
+            Hardware Aktif
+          </div>
+        </div>
+      </aside>
 
-            {showNotifications && (
-              <div className="absolute right-0 top-12 w-[280px] sm:w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white rounded-t-lg">
-                  <h3 className="font-semibold text-gray-800">Notifikasi</h3>
-                  <button onClick={() => setShowNotifications(false)} className="p-1 hover:bg-gray-100 rounded">
-                    <X className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {notifications.map((notif) => (
-                    <div key={notif.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                          notif.type === "warning" ? "bg-yellow-500" : "bg-green-500"
-                        }`}></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-800">{notif.message}</p>
-                          <p className="text-xs text-gray-500 mt-1">{notif.time}</p>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+        {/* Top Header */}
+        <header className="bg-rs-card border-b border-rs-border px-4 sm:px-8 py-4 flex items-center justify-between z-20 shadow-sm shrink-0">
+          <Link to="/" className="flex items-center gap-3 md:hidden group">
+            <div className="w-12 h-12 flex items-center justify-center flex-shrink-0 bg-rs-sage-light rounded-xl p-1.5 shadow-sm group-hover:scale-105 transition-transform">
+              <img src={logoImg} alt="RumiSync Logo" className="w-full h-full object-contain scale-110" />
+            </div>
+            <div className="text-xl font-black text-rs-primary tracking-tight group-hover:opacity-80 transition-opacity">RUMI-SYNC</div>
+          </Link>
+          
+          {/* Desktop/Tablet Global Context Header Items */}
+          <div className="hidden md:flex flex-1 items-center justify-between">
+            <div className="text-rs-muted font-medium text-sm lg:text-base">
+              Beranda {location.pathname !== '/' && `> ${navigationItems.find(n => isActive(n.path))?.label}`}
+            </div>
+
+            <div className="flex items-center gap-6">
+              <div className="relative" ref={notificationRef}>
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative p-3 bg-rs-bg border border-rs-border text-rs-primary hover:bg-rs-border rounded-2xl transition-all min-h-[56px] min-w-[56px] flex items-center justify-center shadow-sm"
+                >
+                  <Bell className="w-6 h-6" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-2.5 right-2.5 min-w-5 h-5 px-1 bg-[#c25944] text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-rs-card">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 top-16 w-80 md:w-96 bg-rs-card rounded-3xl shadow-xl border border-rs-border z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden flex flex-col max-h-[500px]">
+                    <div className="flex items-center justify-between p-5 border-b border-rs-border bg-rs-card-sub shrink-0">
+                      <h3 className="font-bold text-rs-text text-lg">Notifikasi Sistem</h3>
+                      <button onClick={() => setShowNotifications(false)} className="p-2 hover:bg-rs-border rounded-full text-rs-sage">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                      {notifications.length > 0 ? notifications.map((notif) => (
+                        <div 
+                          key={notif.id} 
+                          onClick={() => handleNotificationClick(notif)}
+                          className={`p-4 rounded-xl border transition-colors cursor-pointer ${
+                            notif.isRead 
+                              ? "bg-rs-card border-[#f4f5f2] hover:bg-[#f8f9f7]" 
+                              : "bg-rs-card-sub border-rs-border hover:bg-rs-border/50"
+                          }`}
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${
+                              notif.type === "warning" ? "bg-[#c25944]" : notif.type === "success" ? "bg-rs-primary" : "bg-[#d97706]"
+                            }`}></div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm leading-relaxed ${notif.isRead ? "text-rs-muted font-medium" : "text-rs-text font-bold"}`}>
+                                {notif.message}
+                              </p>
+                              {notif.cattleId && (
+                                <div className="mt-2 inline-block px-2 py-1 bg-rs-sage-light rounded-md text-[10px] font-bold text-rs-sage">
+                                  Terkait: {notif.cattleId}
+                                </div>
+                              )}
+                              <p className="text-xs font-semibold text-[#8ca195] mt-1.5">{notif.time}</p>
+                            </div>
+                            {notif.isRead && <CheckCircle2 className="w-4 h-4 text-[#e2e8e4]" />}
+                          </div>
                         </div>
+                      )) : (
+                        <div className="p-6 text-center text-rs-muted font-medium">Belum ada notifikasi</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Right Controls */}
+          <div className="flex md:hidden items-center gap-3">
+            <BatteryIndicator level={batteryLevel} />
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-rs-primary bg-rs-bg border border-rs-border rounded-xl relative hover:bg-rs-border transition-colors">
+              <Bell className="w-6 h-6" />
+              {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#c25944] rounded-full border-2 border-rs-card"></span>}
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile Slide-down Menu for Notifications */}
+        {mobileMenuOpen && (
+          <div className="md:hidden bg-rs-card border-b border-rs-border p-4 animate-in slide-in-from-top-2 z-10 relative shadow-md max-h-[60vh] overflow-y-auto">
+             <div className="mb-4 font-bold text-rs-text text-lg">Notifikasi Sistem</div>
+             <div className="space-y-2">
+               {notifications.length > 0 ? notifications.map((notif) => (
+                  <div 
+                    key={notif.id} 
+                    onClick={() => { handleNotificationClick(notif); setMobileMenuOpen(false); }}
+                    className={`p-4 rounded-xl border cursor-pointer ${
+                      notif.isRead ? "bg-rs-card border-[#f4f5f2]" : "bg-rs-card-sub border-rs-border"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${notif.type === "warning" ? "bg-[#c25944]" : "bg-rs-primary"}`}></div>
+                      <div>
+                        <p className={`text-sm ${notif.isRead ? "text-rs-muted font-medium" : "text-rs-text font-bold"}`}>{notif.message}</p>
+                        <p className="text-xs font-semibold text-[#8ca195] mt-1">{notif.time}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="p-3 text-center border-t border-gray-200 bg-white rounded-b-lg">
-                  <button className="text-sm text-green-600 hover:text-green-700">Lihat Semua</button>
-                </div>
-              </div>
-            )}
+                  </div>
+                )) : (
+                  <p className="text-sm text-rs-muted">Tidak ada notifikasi aktif.</p>
+                )}
+             </div>
           </div>
-        </div>
-      </header>
+        )}
 
-      <main className="flex-1 overflow-auto">
-        <Outlet />
-      </main>
+        {/* Main Routed Content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-rs-bg">
+          <Outlet />
+        </main>
 
-      {/* Bottom Navigation - Ubah efek aktif ke hijau */}
-      <nav className="bg-white border-t border-gray-200 px-2 sm:px-4 py-2 sticky bottom-0" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-        <div className="flex justify-around items-center max-w-2xl mx-auto">
-          <Link to="/" className={`flex flex-col items-center gap-1 px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${isActive("/") ? "bg-green-50 text-green-600" : "text-gray-600 hover:bg-gray-50"}`}>
-            <Home className="w-5 sm:w-6 h-5 sm:h-6" />
-            <span className="text-xs">Beranda</span>
-          </Link>
-
-          <Link to="/medical" className={`flex flex-col items-center gap-1 px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${isActive("/medical") ? "bg-green-50 text-green-600" : "text-gray-600 hover:bg-gray-50"}`}>
-            <Activity className="w-5 sm:w-6 h-5 sm:h-6" />
-            <span className="text-xs">Pantau Medis</span>
-          </Link>
-
-          <Link to="/eco-nutrition" className={`flex flex-col items-center gap-1 px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${isActive("/eco-nutrition") ? "bg-green-50 text-green-600" : "text-gray-600 hover:bg-gray-50"}`}>
-            <Leaf className="w-5 sm:w-6 h-5 sm:h-6" />
-            <span className="text-xs">Eco-Nutrisi</span>
-          </Link>
-
-          <Link to="/system-control" className={`flex flex-col items-center gap-1 px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm ${isActive("/system-control") ? "bg-green-50 text-green-600" : "text-gray-600 hover:bg-gray-50"}`}>
-            <Settings className="w-5 sm:w-6 h-5 sm:h-6" />
-            <span className="text-xs">Kontrol Sistem</span>
-          </Link>
-        </div>
-      </nav>
+        {/* Mobile Bottom Navigation */}
+        <nav className="md:hidden bg-rs-card border-t border-rs-border px-2 py-3 sticky bottom-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.04)]" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+          <div className="flex justify-around items-center max-w-lg mx-auto">
+            {navigationItems.map((item) => {
+              const active = isActive(item.path);
+              return (
+                <Link key={item.path} to={item.path} className={`flex flex-col items-center gap-1.5 min-w-[72px] min-h-[56px] justify-center px-1 py-2 rounded-2xl transition-all ${active ? "bg-rs-border text-rs-primary font-bold scale-105" : "text-rs-muted hover:bg-rs-sage-light hover:text-rs-primary"}`}>
+                  <item.icon className={`w-7 h-7 ${active ? "fill-[#4c7766]/20" : ""}`} />
+                  <span className="text-[11px] leading-tight font-semibold">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
     </div>
   );
 }

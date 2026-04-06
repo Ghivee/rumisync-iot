@@ -1,257 +1,169 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Lightbulb, TrendingDown, Leaf } from "lucide-react";
-import { toast } from "sonner";
-
-const cattleData = [
-  { 
-    id: "ID-002", 
-    name: "SAPI LOKAL - ID-002", 
-    methaneLevel: 110,
-    rumination: {
-      status: "Kunyahan Normal & Aktif",
-      frequency: "58x/mnt",
-      duration: "3.5 detik",
-      intensity: "Sedang",
-      metanePotential: "Kategori Normal",
-      feedType: "Rumput segar + konsentrat seimbang",
-      recommendation: "1.0 Kg dedak pada pakan sore",
-      targetMethane: "110g → 100g/hari",
-      feedBoost: "+8%",
-      ruminalHealth: "Optimal"
-    }
-  },
-  { 
-    id: "ID-005", 
-    name: "SAPI LOKAL - ID-005", 
-    methaneLevel: 140,
-    rumination: {
-      status: "Kunyahan Lambat & Tidak Konsisten",
-      frequency: "42x/mnt",
-      duration: "3.8 detik",
-      intensity: "Tinggi",
-      metanePotential: "Kategori Tinggi",
-      feedType: "Jerami kering dominan, kurang konsentrat",
-      recommendation: "2.0 Kg konsentrat pada pakan pagi dan sore",
-      targetMethane: "140g → 115g/hari",
-      feedBoost: "+15%",
-      ruminalHealth: "Perlu monitor"
-    }
-  },
-  { 
-    id: "ID-007", 
-    name: "SAPI LOKAL - ID-007", 
-    methaneLevel: 120,
-    rumination: {
-      status: "Kunyahan Lambat & Berat",
-      frequency: "45x/mnt",
-      duration: "3.2 detik",
-      intensity: "Tinggi",
-      metanePotential: "Sedang",
-      feedType: "Serat kasar/jerami kering dominan",
-      recommendation: "1.5 Kg konsentrat pada pakan sore",
-      targetMethane: "120g → 102g/hari",
-      feedBoost: "+12%",
-      ruminalHealth: "Optimal"
-    }
-  },
-  { 
-    id: "ID-009", 
-    name: "SAPI LOKAL - ID-009", 
-    methaneLevel: 95,
-    rumination: {
-      status: "Kunyahan Cepat & Aktif",
-      frequency: "65x/mnt",
-      duration: "2.9 detik",
-      intensity: "Rendah",
-      metanePotential: "Rendah",
-      feedType: "Pakan berkualitas tinggi dengan konsentrat optimal",
-      recommendation: "Pertahankan formulasi pakan saat ini",
-      targetMethane: "95g → 88g/hari",
-      feedBoost: "+5%",
-      ruminalHealth: "Sangat Optimal"
-    }
-  },
-  { 
-    id: "ID-012", 
-    name: "SAPI LOKAL - ID-012", 
-    methaneLevel: 130,
-    rumination: {
-      status: "Kunyahan Sedang & Moderat",
-      frequency: "52x/mnt",
-      duration: "3.4 detik",
-      intensity: "Sedang",
-      metanePotential: "Normal",
-      feedType: "Campuran rumput dan jerami dengan konsentrat",
-      recommendation: "1.2 Kg dedak untuk optimasi fermentasi",
-      targetMethane: "130g → 112g/hari",
-      feedBoost: "+13%",
-      ruminalHealth: "Optimal"
-    }
-  },
-];
+import { Lightbulb, TrendingDown, Leaf, Search, Filter } from "lucide-react";
+import { useCattle } from "../context/CattleContext";
 
 export function EcoNutrition() {
-  const [selectedCattle, setSelectedCattle] = useState(cattleData[0]);
+  const { cattleData, selectedCattleId, setSelectedCattleId, selectedCattle } = useCattle();
+  
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredCattle = cattleData.filter(cattle => {
+    const matchesSearch = cattle.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          cattle.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "all" ? true :
+                          statusFilter === "safe" ? (cattle.status === 'normal' && parseFloat(cattle.temp) <= 39.0) :
+                          statusFilter === "danger" ? (parseFloat(cattle.temp) >= 39.5 || cattle.health < 80) :
+                          (!(cattle.status === 'normal' && parseFloat(cattle.temp) <= 39.0) && !(parseFloat(cattle.temp) >= 39.5 || cattle.health < 80));
+    return matchesSearch && matchesStatus;
+  });
+
   const methaneLevel = selectedCattle.methaneLevel;
   const maxMethane = 200;
-  const percentage = (methaneLevel / maxMethane) * 100;
-
-  const filteredCattle = cattleData.filter((cattle) =>
-    cattle.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    cattle.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleSelectCattle = (cattleId) => {
-    const cattle = cattleData.find(c => c.id === cattleId);
-    if (cattle) {
-      setSelectedCattle(cattle);
-    }
-  };
-
-  const getNeedleRotation = () => {
-    return -90 + (percentage * 1.8);
-  };
 
   const getCategory = () => {
-    if (methaneLevel < 100) return { text: "Rendah", color: "text-green-600", bg: "bg-green-50" };
-    if (methaneLevel < 150) return { text: "Normal", color: "text-yellow-600", bg: "bg-yellow-50" };
-    return { text: "Tinggi", color: "text-red-600", bg: "bg-red-50" };
+    if (methaneLevel < 100) return { text: "Rendah", color: "text-rs-primary", bg: "bg-rs-border", border: "border-rs-sage" };
+    if (methaneLevel < 150) return { text: "Normal", color: "text-[#d97706]", bg: "bg-[#fef3c7]", border: "border-amber-300" };
+    return { text: "Tinggi", color: "text-[#c25944]", bg: "bg-[#fee2e2]", border: "border-[#fca5a5]" };
   };
 
   const category = getCategory();
 
+  // Speedometer Calculation (180 degrees)
+  // Value goes from 0 to 200. Maps to angles 180 to 360 (or -180 to 0)
+  // Let's use rotation instead of complex coordinates
+  const rotationDegrees = -90 + (methaneLevel / maxMethane) * 180;
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-3xl text-gray-800 mb-2">Eco-Nutrisi & Carbon Tracker</h1>
-        <p className="text-gray-600">Fitur "Penyelamat Bumi" - Optimasi Pakan & Emisi</p>
+    <div className="p-3 sm:p-8 space-y-4 sm:space-y-8 max-w-7xl mx-auto pb-24 md:pb-8">
+      {/* Header - Center on Mobile, Left on Desktop */}
+      <div className="text-center md:text-left flex flex-col md:flex-row items-center md:items-start gap-3 md:gap-4 mb-4 sm:mb-6">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rs-primary rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg text-white shrink-0">
+          <Leaf className="w-5 h-5 sm:w-7 sm:h-7" />
+        </div>
+        <div>
+          <h1 className="text-2xl sm:text-4xl font-bold text-rs-text mb-0.5 sm:mb-1">Eco-Nutrisi & Carbon Tracker</h1>
+          <p className="text-rs-muted text-xs sm:text-base">Mendukung Keberlanjutan - Emisi Gas Buang</p>
+        </div>
       </div>
 
-      {/* Cattle Selection */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-lg shadow-md p-4"
-      >
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-gray-700 block">Pilih Sapi untuk Dianalisis:</label>
-          <div className="flex flex-col gap-3">
+      {/* Cattle Selection Block */}
+      <div className="bg-rs-card rounded-3xl shadow-sm border border-rs-border p-4 sm:p-6">
+        <label className="text-sm font-bold text-rs-text block mb-3">Pilih Sapi untuk Analisis Nutrisi:</label>
+        <div className="flex flex-col lg:flex-row gap-4">
+          
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-rs-sage w-5 h-5 pointer-events-none" />
             <input
               type="text"
-              placeholder="Cari ID atau nama sapi..."
+              placeholder="Cari by ID / Nama..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full pl-12 pr-4 py-3 min-h-[56px] bg-rs-card-sub border-2 border-rs-border rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-rs-primary transition-all text-rs-text font-medium"
             />
+          </div>
+
+          <div className="relative">
+            <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 text-rs-sage w-5 h-5 pointer-events-none" />
             <select
-              value={selectedCattle.id}
-              onChange={(e) => handleSelectCattle(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full lg:w-48 pl-12 pr-10 py-3 min-h-[56px] appearance-none bg-rs-card-sub border-2 border-rs-border text-rs-text font-bold rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-rs-primary transition-all cursor-pointer"
             >
-              {filteredCattle.length > 0 ? (
-                filteredCattle.map((cattle) => (
-                  <option key={cattle.id} value={cattle.id}>
-                    {cattle.name}
-                  </option>
-                ))
-              ) : (
-                <option disabled>Sapi tidak ditemukan</option>
-              )}
+              <option value="all">Semua</option>
+              <option value="safe">Sehat</option>
+              <option value="warning">Pantauan</option>
+              <option value="danger">Sakit/Demam</option>
             </select>
           </div>
+
+          <select
+            value={filteredCattle.some(c => c.id === selectedCattleId) ? selectedCattleId : ""}
+            onChange={(e) => setSelectedCattleId(e.target.value)}
+            className="w-full lg:w-72 px-5 py-3 min-h-[56px] bg-rs-card border-2 border-rs-primary rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#6b8e7b]/30 focus:border-rs-primary transition-all text-rs-primary font-bold shadow-sm appearance-none cursor-pointer"
+          >
+            {filteredCattle.length > 0 ? (
+              filteredCattle.map((cattle) => (
+                <option key={cattle.id} value={cattle.id}>
+                  {cattle.id} - {cattle.name.split(' - ')[0]}
+                </option>
+              ))
+            ) : (
+              <option value="" disabled>Sapi tak ditemukan</option>
+            )}
+          </select>
+
         </div>
-      </motion.div>
+        
+        {filteredCattle.length === 0 && (
+          <div className="mt-4 p-4 bg-[#fee2e2] text-[#c25944] rounded-xl border border-[#fca5a5] text-sm font-bold shadow-sm inline-block">
+            Hasil pencarian tidak ditemukan. Silakan sesuaikan filter.
+          </div>
+        )}
+      </div>
 
       {/* Speedometer Methane Emissions */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl shadow-lg p-8"
+        className="bg-rs-card-sub border border-rs-border rounded-3xl shadow-sm p-4 sm:p-10 relative overflow-hidden"
       >
-        <div className="text-center mb-8">
-          <h2 className="text-2xl text-gray-800 font-bold mb-2">Speedometer Emisi Metana</h2>
-          <p className="text-gray-600">{selectedCattle.name}</p>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-rs-border/30 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+
+        <div className="text-center mb-8 relative z-10">
+          <h2 className="text-2xl text-rs-text font-bold mb-2">Monitor Emisi Metana Harian</h2>
+          <p className="text-rs-muted font-medium">{selectedCattle.name}</p>
         </div>
 
-        <div className="flex flex-col items-center justify-center">
-          {/* Horizontal Speedometer SVG */}
-          <div className="relative w-full max-w-2xl">
-            <svg viewBox="0 0 400 160" className="w-full h-auto drop-shadow-lg" style={{ minHeight: '120px' }}>
-              {/* Outer background rectangle */}
-              <rect x="20" y="50" width="360" height="45" fill="#ffffff" stroke="#d1d5db" strokeWidth="2" rx="8" />
+        <div className="flex flex-col items-center justify-center relative z-10 mt-4">
+          {/* Half Circle Speedometer SVG - Fixed ViewBox from 110 to 140 to prevent bottom clipping */}
+          <div className="relative w-full max-w-[320px] sm:max-w-md px-4 flex flex-col items-center">
+            <svg viewBox="0 0 200 115" className="w-[85%] drop-shadow-sm overflow-visible">
               
-              {/* Green Zone (0-100) */}
-              <rect x="20" y="50" width="120" height="45" fill="#22c55e" opacity="0.2" rx="8" />
+              {/* Background Arch path definition */}
+              <defs>
+                <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="4" stdDeviation="4" floodOpacity="0.1" />
+                </filter>
+              </defs>
+
+              {/* Green Zone 0 - 100 */}
+              <path d="M 20 100 A 80 80 0 0 1 100 20" fill="transparent" stroke="#e2e8e4" strokeWidth="24" strokeLinecap="butt" />
               
-              {/* Yellow Zone (100-150) */}
-              <rect x="140" y="50" width="90" height="45" fill="#eab308" opacity="0.2" />
+              {/* Yellow Zone 100 - 150 */}
+              <path d="M 100 20 A 80 80 0 0 1 156.5 43.4" fill="transparent" stroke="#fef3c7" strokeWidth="24" strokeLinecap="butt" />
               
-              {/* Red Zone (150-200) */}
-              <rect x="230" y="50" width="150" height="45" fill="#ef4444" opacity="0.2" rx="8" />
+              {/* Red Zone 150 - 200 */}
+              <path d="M 156.5 43.4 A 80 80 0 0 1 180 100" fill="transparent" stroke="#fee2e2" strokeWidth="24" strokeLinecap="butt" />
 
-              {/* Tick marks and labels */}
-              {[0, 50, 100, 150, 200].map((value) => {
-                const x = 20 + (value / 200) * 360;
-                return (
-                  <g key={value}>
-                    <line x1={x} y1="50" x2={x} y2="60" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" />
-                    <text x={x} y="43" fill="#6b7280" fontSize="11" textAnchor="middle" fontWeight="600">
-                      {value}
-                    </text>
-                  </g>
-                );
-              })}
+              {/* Ticks and Labels */}
+              <text x="10" y="105" fill="#6b8e7b" fontSize="9" fontWeight="bold" textAnchor="middle">0</text>
+              <text x="50" y="40" fill="#6b8e7b" fontSize="9" fontWeight="bold" textAnchor="middle">50</text>
+              <text x="100" y="10" fill="#6b8e7b" fontSize="9" fontWeight="bold" textAnchor="middle">100</text>
+              <text x="160" y="30" fill="#d97706" fontSize="9" fontWeight="bold" textAnchor="middle">150</text>
+              <text x="190" y="105" fill="#c25944" fontSize="9" fontWeight="bold" textAnchor="middle">200</text>
 
-              {/* Zone labels */}
-              <text x="80" y="120" fill="#22c55e" fontSize="11" fontWeight="bold" textAnchor="middle">
-                Rendah
-              </text>
-              <text x="185" y="120" fill="#eab308" fontSize="11" fontWeight="bold" textAnchor="middle">
-                Sedang
-              </text>
-              <text x="305" y="120" fill="#ef4444" fontSize="11" fontWeight="bold" textAnchor="middle">
-                Tinggi
-              </text>
-
-              {/* Needle indicator - Enhanced */}
-              <motion.g
-                initial={{ x: 20 }}
-                animate={{ x: 20 + (methaneLevel / 200) * 360 }}
-                transition={{ duration: 1.5, type: "spring", stiffness: 60 }}
-              >
-                {/* Needle shadow */}
-                <path
-                  d="M 0 30 L -6 70 L 0 75 L 6 70 Z"
-                  fill="#000000"
-                  opacity="0.15"
-                  filter="drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
-                />
-                {/* Main needle */}
-                <path
-                  d="M 0 30 L -5 70 L 0 75 L 5 70 Z"
-                  fill="#ef4444"
-                  stroke="#991b1b"
-                  strokeWidth="1.5"
-                  filter="drop-shadow(0 3px 6px rgba(0,0,0,0.25))"
-                />
-                {/* Needle highlight */}
-                <path
-                  d="M -1.5 35 L -3 65 L 0 68 L 3 65 Z"
-                  fill="#ffffff"
-                  opacity="0.4"
-                />
-              </motion.g>
+              <g transform="translate(100, 100)">
+                {/* Needle */}
+                <motion.g
+                  initial={{ rotate: -90 }}
+                  animate={{ rotate: rotationDegrees }}
+                  transition={{ duration: 1.5, type: "spring", stiffness: 45 }}
+                >
+                  <path d="M -4 0 L 0 -85 L 4 0 Z" fill="#4c7766" filter="url(#shadow)" />
+                  <circle cx="0" cy="0" r="8" fill="#2d3a33" />
+                  <circle cx="0" cy="0" r="3" fill="#ffffff" />
+                </motion.g>
+              </g>
             </svg>
 
-            {/* Center Display */}
-            <div className="mt-6 text-center">
-              <div className="text-sm text-gray-500 mb-2">Estimasi Emisi</div>
-              <div className="text-4xl font-bold text-gray-800 mb-2">{methaneLevel} <span className="text-2xl">g/hari</span></div>
-              <div className={`inline-block px-4 py-2 rounded-full text-sm font-semibold shadow-md ${category.bg} ${category.color}`}>
-                {category.text}
+            {/* Center Display Underneath */}
+            <div className="text-center mt-6">
+              <div className="text-xs sm:text-sm text-rs-muted font-medium mb-1">Total Limit</div>
+              <div className="text-3xl sm:text-4xl font-black text-rs-text mb-3">{methaneLevel} <span className="text-sm sm:text-lg font-bold text-rs-muted">g/hari</span></div>
+              <div className={`inline-block px-5 py-2 rounded-full text-xs sm:text-sm font-bold border ${category.border} ${category.bg} ${category.color} shadow-sm`}>
+                Level Emisi: {category.text}
               </div>
             </div>
           </div>
@@ -259,55 +171,55 @@ export function EcoNutrition() {
       </motion.div>
 
       {/* Main Grid: Analysis & Recommendations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mt-16 sm:mt-24">
         {/* Left: Biomechanical Chewing Analysis */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-md p-6"
+          className="bg-rs-card rounded-3xl shadow-sm border border-rs-border p-4 sm:p-8"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <TrendingDown className="w-6 h-6 text-blue-600" />
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-14 h-14 bg-rs-sage-light rounded-2xl flex items-center justify-center">
+              <TrendingDown className="w-7 h-7 text-rs-primary" />
             </div>
             <div>
-              <h3 className="text-xl text-gray-800">Analisis Bio-mekanik Kunyahan</h3>
-              <p className="text-sm text-gray-500">Data dari sensor KY-038</p>
+              <h3 className="text-xl font-bold text-rs-text">Analisis Bio-mekanik Kunyahan</h3>
+              <p className="text-sm text-rs-muted font-medium">Data Terpadu dari Sensor Headstall</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <div className="bg-blue-50 rounded-lg p-4">
-              <div className="text-sm text-gray-600 mb-1">Status Ruminasi</div>
-              <div className="text-xl text-blue-900">{selectedCattle.rumination.status}</div>
+            <div className={`border rounded-2xl p-5 ${selectedCattle.rumination.status === 'Normal' ? 'bg-rs-card-sub border-rs-border' : 'bg-[#fef3c7] border-amber-200'}`}>
+              <div className={`text-sm font-semibold mb-1 ${selectedCattle.rumination.status === 'Normal' ? 'text-rs-sage' : 'text-[#d97706]'}`}>Status Ruminasi Saat Ini</div>
+              <div className="text-xl font-bold text-rs-text">{selectedCattle.rumination.status}</div>
             </div>
 
-            <div className="bg-yellow-50 rounded-lg p-4">
-              <div className="text-sm text-gray-600 mb-2">Prediksi AI</div>
-              <p className="text-gray-800">
-                Pakan saat ini didominasi <span className="font-semibold">{selectedCattle.rumination.feedType}</span>
+            <div className="bg-rs-card-sub border border-rs-border rounded-2xl p-5">
+              <div className="text-sm font-semibold text-rs-sage mb-2">Deteksi Pola Pakan AI</div>
+              <p className="text-rs-text leading-relaxed">
+                Pakan subjek terdeteksi dominan: <span className="font-bold">{selectedCattle.rumination.feedType}</span>
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">Frekuensi</div>
-                <div className="text-lg text-gray-800">{selectedCattle.rumination.frequency}</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-rs-sage-light rounded-2xl p-4 border border-transparent hover:border-rs-border transition-colors">
+                <div className="text-xs font-semibold text-rs-muted mb-1">Frekuensi</div>
+                <div className="text-lg font-bold text-rs-text">{selectedCattle.rumination.frequency}</div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">Durasi Rata-rata</div>
-                <div className="text-lg text-gray-800">{selectedCattle.rumination.duration}</div>
+              <div className="bg-rs-sage-light rounded-2xl p-4 border border-transparent hover:border-rs-border transition-colors">
+                <div className="text-xs font-semibold text-rs-muted mb-1">Durasi Rata-rata</div>
+                <div className="text-lg font-bold text-rs-text">{selectedCattle.rumination.duration}</div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">Intensitas</div>
-                <div className={`text-lg ${selectedCattle.rumination.intensity === "Tinggi" ? "text-orange-600" : selectedCattle.rumination.intensity === "Rendah" ? "text-green-600" : "text-blue-600"}`}>
+              <div className="bg-rs-sage-light rounded-2xl p-4 border border-transparent hover:border-rs-border transition-colors">
+                <div className="text-xs font-semibold text-rs-muted mb-1">Intensitas</div>
+                <div className={`text-lg font-bold ${selectedCattle.rumination.intensity === "Tinggi" ? "text-[#c25944]" : selectedCattle.rumination.intensity === "Rendah" ? "text-rs-primary" : "text-[#d97706]"}`}>
                   {selectedCattle.rumination.intensity}
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-1">Potensi Metana</div>
-                <div className="text-lg text-yellow-600">{selectedCattle.rumination.metanePotential}</div>
+              <div className="bg-rs-sage-light rounded-2xl p-4 border border-transparent hover:border-rs-border transition-colors">
+                <div className="text-xs font-semibold text-rs-muted mb-1">Kapasitas Metana</div>
+                <div className="text-lg font-bold text-[#d97706]">{selectedCattle.rumination.metanePotential}</div>
               </div>
             </div>
           </div>
@@ -318,77 +230,60 @@ export function EcoNutrition() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white"
+          className="bg-rs-primary rounded-3xl shadow-sm p-4 sm:p-8 text-white relative overflow-hidden"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              <Lightbulb className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-4 mb-6 relative z-10">
+            <div className="w-14 h-14 bg-rs-card/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-rs-card/20">
+              <Lightbulb className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h3 className="text-xl">AI Feed Advisor</h3>
-              <p className="text-sm text-green-100">Rekomendasi Pakan Cerdas</p>
+              <h3 className="text-xl font-bold">AI Feed Advisor</h3>
+              <p className="text-sm text-[#e2e8e4]">Asisten Resep Emisi & Nutrisi</p>
             </div>
           </div>
 
-          {/* Prescription-style box */}
-          <div className="bg-white rounded-lg p-6 text-gray-800 shadow-md">
-            <div className="border-b-2 border-green-500 pb-3 mb-4">
+          <div className="bg-rs-card rounded-2xl p-4 sm:p-8 text-rs-text shadow-lg relative z-10">
+            <div className="border-b-2 border-rs-border pb-4 mb-5">
               <div className="flex items-center justify-between">
-                <div className="text-lg">📋 Resep Nutrisi</div>
-                <div className="text-sm text-gray-500">ID: {selectedCattle.id}</div>
+                <div className="text-lg font-bold flex items-center gap-2">
+                  <span>📋</span> Resep Formulasi
+                </div>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <div className="text-sm text-gray-500 mb-2">💡 Saran Sistem</div>
-                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
-                  <p className="text-gray-800 leading-relaxed">
+                <div className="text-xs font-semibold text-rs-muted mb-2 uppercase tracking-wider">Aksi Dianjurkan</div>
+                <div className="bg-rs-card-sub border border-[#d97706] p-4 rounded-xl shadow-sm">
+                  <p className="text-rs-text text-sm font-medium leading-relaxed">
                     {selectedCattle.rumination.recommendation}
                   </p>
                 </div>
               </div>
 
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600 mb-2">🎯 Target Optimasi</div>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Emisi Metana:</span>
-                    <span className="font-semibold text-blue-600">{selectedCattle.rumination.targetMethane}</span>
+              <div className="bg-rs-sage-light rounded-xl p-4">
+                <div className="text-xs font-semibold text-rs-muted mb-3 uppercase tracking-wider">Target Optimasi</div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center bg-rs-card p-3 rounded-lg shadow-sm border border-rs-border">
+                    <span className="text-xs sm:text-sm font-semibold text-rs-sage">Reduksi Emisi</span>
+                    <span className="text-sm sm:text-base font-bold text-rs-primary">{selectedCattle.rumination.targetMethane}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Efisiensi Pakan:</span>
-                    <span className="font-semibold text-green-600">{selectedCattle.rumination.feedBoost}</span>
+                  <div className="flex justify-between items-center bg-rs-card p-3 rounded-lg shadow-sm border border-rs-border">
+                    <span className="text-xs sm:text-sm font-semibold text-rs-sage">Stimulasi Pakan</span>
+                    <span className="text-sm sm:text-base font-bold text-rs-primary">{selectedCattle.rumination.feedBoost}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">Kesehatan Rumen:</span>
-                    <span className="font-semibold text-green-600">{selectedCattle.rumination.ruminalHealth}</span>
+                  <div className="flex justify-between items-center bg-rs-card p-3 rounded-lg shadow-sm border border-rs-border">
+                    <span className="text-xs sm:text-sm font-semibold text-rs-sage">Kondisi Rumen</span>
+                    <span className={`text-sm sm:text-base font-bold ${selectedCattle.rumination.ruminalHealth.includes('Bahaya') ? 'text-[#c25944]' : 'text-rs-primary'}`}>{selectedCattle.rumination.ruminalHealth}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600 mb-2">📦 Komposisi Pakan Baru</div>
-                <ul className="space-y-1.5 text-sm">
-                  <li className="flex justify-between">
-                    <span>• Jerami/Rumput</span>
-                    <span className="font-medium">60%</span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>• Konsentrat/Dedak</span>
-                    <span className="font-medium text-green-600">30% ↑</span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>• Mineral Mix</span>
-                    <span className="font-medium">10%</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
-                <span className="text-2xl">🌍</span>
-                <div className="text-sm text-green-800">
-                  <span className="font-semibold">Dampak Lingkungan:</span> Setara mengurangi emisi CO₂ mobil sejauh {Math.round((200 - selectedCattle.methaneLevel) / 10)} Km/hari
+              <div className="bg-rs-border border border-rs-sage/30 rounded-xl p-4 flex items-center gap-3">
+                <div className="text-2xl sm:text-3xl">🌍</div>
+                <div className="text-xs sm:text-sm text-rs-text">
+                  <span className="font-bold block mb-0.5">Dampak Lingkungan Positif</span> 
+                  Setara mengurangi emisi CO₂ mobil sejauh {Math.max(1, Math.round((200 - selectedCattle.methaneLevel) / 10))} Km/hari
                 </div>
               </div>
             </div>
