@@ -142,11 +142,12 @@ export function SystemControl() {
 
   const handleScanBluetooth = () => {
     setIsScanning(true);
-    toast.loading("Memindai iTag Bluetooth...", { style: { minHeight: '64px', fontSize: '16px' } });
+    const toastId = toast.loading("Memindai iTag Bluetooth...", { style: { minHeight: '64px', fontSize: '16px' } });
     setTimeout(() => {
       setIsScanning(false);
+      toast.dismiss(toastId);
       toast.success("Scan Selesai!", {
-        description: "Ditemukan iTag baru. Anda dapat mengisi form.",
+        description: "iTag terdeteksi. Silakan isi form pendaftaran.",
         style: { minHeight: '64px', fontSize: '16px' }
       });
     }, 2000);

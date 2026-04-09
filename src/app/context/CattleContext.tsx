@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export interface CattleData {
   id: string;
@@ -108,6 +108,17 @@ const generateMockCattle = (): CattleData[] => {
 
 const mockCattleData = generateMockCattle();
 
+const LS_KEY = 'rumisync_cattle_v1';
+const LS_NOTIF_KEY = 'rumisync_notif_v1';
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch {}
+  return fallback;
+}
+
 const mockNotifications: AppNotification[] = [
   { id: 1, type: "warning", message: "ID-005: Suhu meningkat pesat - Indikasi Demam", time: "10 menit lalu", cattleId: "ID-005", isRead: false },
   { id: 2, type: "warning", message: "ID-012: Kunyahan menurun - Perlu pantauan", time: "25 menit lalu", cattleId: "ID-012", isRead: false },
@@ -130,9 +141,21 @@ interface CattleContextType {
 const CattleContext = createContext<CattleContextType | undefined>(undefined);
 
 export function CattleProvider({ children }: { children: ReactNode }) {
-  const [cattleData, setCattleData] = useState<CattleData[]>(mockCattleData);
-  const [selectedCattleId, setSelectedCattleId] = useState<string>(mockCattleData[0].id);
-  const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications);
+  const [cattleData, setCattleData] = useState<CattleData[]>(() => loadFromStorage(LS_KEY, mockCattleData));
+  const [selectedCattleId, setSelectedCattleId] = useState<string>(() => {
+    const data = loadFromStorage<CattleData[]>(LS_KEY, mockCattleData);
+    return data[0]?.id || mockCattleData[0].id;
+  });
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => loadFromStorage(LS_NOTIF_KEY, mockNotifications));
+
+  // Persist to localStorage on every change
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(cattleData)); } catch {}
+  }, [cattleData]);
+
+  useEffect(() => {
+    try { localStorage.setItem(LS_NOTIF_KEY, JSON.stringify(notifications)); } catch {}
+  }, [notifications]);
 
   const selectedCattle = cattleData.find(c => c.id === selectedCattleId) || cattleData[0];
 

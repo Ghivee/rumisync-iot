@@ -81,7 +81,7 @@ export function Layout() {
   ];
 
   return (
-    <div className="h-screen flex flex-col md:flex-row bg-rs-bg selection:bg-rs-primary selection:text-white overflow-hidden">
+    <div className="flex flex-col md:flex-row bg-rs-bg selection:bg-rs-primary selection:text-white" style={{ height: '100dvh', minHeight: '-webkit-fill-available' }}>
       <Toaster position="top-center" richColors />
       
       {/* Sidebar for Tablet (md) and Desktop (lg) */}
@@ -124,9 +124,9 @@ export function Layout() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-        {/* Top Header */}
-        <header className="bg-rs-card border-b border-rs-border px-4 sm:px-8 py-4 flex items-center justify-between z-20 shadow-sm shrink-0">
+      <div className="flex-1 flex flex-col min-h-0 w-full">
+        {/* Top Header - shrink-0 so it never gets squished */}
+        <header className="bg-rs-card border-b border-rs-border px-4 sm:px-8 py-4 flex items-center justify-between z-30 shadow-sm shrink-0">
           <Link to="/" className="flex items-center gap-3 md:hidden group">
             <div className="w-12 h-12 flex items-center justify-center flex-shrink-0 bg-rs-sage-light rounded-xl p-1.5 shadow-sm group-hover:scale-105 transition-transform">
               <img src={logoImg} alt="RumiSync Logo" className="w-full h-full object-contain scale-110" />
@@ -239,13 +239,13 @@ export function Layout() {
           </div>
         )}
 
-        {/* Main Routed Content */}
+        {/* Main Routed Content - flex-1 + overflow-y-auto is the correct scroll pattern */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-rs-bg">
           <Outlet />
         </main>
 
-        {/* Mobile Bottom Navigation */}
-        <nav className="md:hidden bg-rs-card border-t border-rs-border px-2 py-3 sticky bottom-0 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.04)]" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+        {/* Mobile Bottom Navigation - shrink-0 keeps it at bottom of flex column */}
+        <nav className="md:hidden bg-rs-card border-t border-rs-border px-2 py-3 z-40 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.04)]" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
           <div className="flex justify-around items-center max-w-lg mx-auto">
             {navigationItems.map((item) => {
               const active = isActive(item.path);
