@@ -5,27 +5,27 @@ import { useCattle } from "../context/CattleContext";
 
 // ─── Data Definitions ──────────────────────────────────────────────────────
 const SERAT_OPTIONS = [
-  { id: 'jerami_padi', label: 'Jerami Padi / Silase Jerami Padi', desc: 'Limbah pertanian paling umum, serat tinggi & menuntut kunyah lama', methaneFactor: 1.80 },
-  { id: 'pucuk_tebu', label: 'Pucuk Tebu / Silase Pucuk Tebu', desc: 'Limbah sisa panen perkebunan tebu, sering dimanfaatkan peternak', methaneFactor: 1.65 },
-  { id: 'pelepah_sawit', label: 'Pelepah Sawit / Silase Pelepah Sawit', desc: 'Sangat relevan untuk peternak di area Sumatera dan Kalimantan', methaneFactor: 1.55 },
-  { id: 'jerami_jagung', label: 'Jerami Jagung (Tebon)', desc: 'Sisa panen jagung, sering dicacah langsung atau dibuat silase', methaneFactor: 1.42 },
-  { id: 'rumput_gajah', label: 'Rumput Gajah / Odot / Lapangan', desc: 'Pakan hijauan segar standar, paling umum dicari peternak tiap hari', methaneFactor: 1.25 },
+  { id: 'jerami_padi', label: 'Jerami Padi / Silase Jerami Padi', methaneFactor: 1.80 },
+  { id: 'pucuk_tebu', label: 'Pucuk Tebu / Silase Pucuk Tebu', methaneFactor: 1.65 },
+  { id: 'pelepah_sawit', label: 'Pelepah Sawit / Silase Pelepah Sawit', methaneFactor: 1.55 },
+  { id: 'jerami_jagung', label: 'Jerami Jagung (Tebon)', methaneFactor: 1.42 },
+  { id: 'rumput_gajah', label: 'Rumput Gajah / Odot / Lapangan', methaneFactor: 1.25 },
 ];
 
 const PATI_OPTIONS = [
-  { id: 'bis', label: 'Bungkil Inti Sawit (BIS)', desc: 'Primadona peternak: murah & mudah. BETN mencapai 46.67–46.99%', methaneFactor: 0.72 },
-  { id: 'jagung', label: 'Jagung Giling / Silase Jagung', desc: 'Pati sangat tinggi (55.9%), sangat efektif gemukkan sapi & tekan emisi', methaneFactor: 0.65 },
-  { id: 'dedak', label: 'Dedak Padi / Bekatul', desc: 'Turunan padi yang umum dicampurkan ke dalam adukan pakan', methaneFactor: 0.78 },
-  { id: 'pollard', label: 'Pollard Gandum', desc: 'Limbah penggilingan gandum, sumber karbohidrat populer lokal', methaneFactor: 0.80 },
+  { id: 'bis', label: 'Bungkil Inti Sawit (BIS)', methaneFactor: 0.72 },
+  { id: 'jagung', label: 'Jagung Giling / Silase Jagung', methaneFactor: 0.65 },
+  { id: 'dedak', label: 'Dedak Padi / Bekatul', methaneFactor: 0.78 },
+  { id: 'pollard', label: 'Pollard Gandum', methaneFactor: 0.80 },
 ];
 
 const PROTEIN_OPTIONS = [
-  { id: 'none', label: '— Tidak Ada (Opsional) —', desc: '', reduction: 0 },
-  { id: 'gamal', label: 'Daun Gamal', desc: '35% gamal + 30% konsentrat terbukti meningkatkan bobot harian signifikan', reduction: 0.12 },
-  { id: 'indigofera', label: 'Indigofera sp.', desc: 'Hijauan super: Protein kasar 27.75%, kecernaan BK 75.14%', reduction: 0.15 },
-  { id: 'lamtoro', label: 'Daun Lamtoro / Kaliandra', desc: 'Tanaman pagar kaya protein, sering ditanam di sekitar kandang rakyat', reduction: 0.10 },
-  { id: 'alfalfa', label: 'Alfalfa', desc: 'Pakan legum berkualitas tinggi, sering digunakan untuk sapi perah', reduction: 0.14 },
-  { id: 'bungkil_kopra', label: 'Bungkil Kopra', desc: 'Sisa perasan kelapa kaya protein nabati, mudah didapat di desa', reduction: 0.08 },
+  { id: 'none', label: ' Tidak Ada (Opsional) ', reduction: 0 },
+  { id: 'gamal', label: 'Daun Gamal', reduction: 0.12 },
+  { id: 'indigofera', label: 'Indigofera sp.', reduction: 0.15 },
+  { id: 'lamtoro', label: 'Daun Lamtoro / Kaliandra', reduction: 0.10 },
+  { id: 'alfalfa', label: 'Alfalfa', reduction: 0.14 },
+  { id: 'bungkil_kopra', label: 'Bungkil Kopra', reduction: 0.08 },
 ];
 
 const ECO_BOOSTERS = [
@@ -202,9 +202,9 @@ export function EcoNutrition() {
             {/* Kat 1: Serat */}
             <div>
               <label className="flex items-center gap-1.5 text-xs font-bold text-rs-text mb-1">
-                <span>🌾</span> Kat. 1 — Sumber Serat Kasar (Pakan Basal)
+                <span>🌾</span> Sumber Serat Kasar
               </label>
-              <p className="text-xs text-rs-muted mb-2">Serat tinggi ↔ metana lebih tinggi jika diberikan sendirian.</p>
+
               <select value={seratId} onChange={e => setSeratId(e.target.value)}
                 className="w-full px-3 py-2.5 min-h-[44px] bg-rs-card-sub border-2 border-rs-border rounded-xl focus:outline-none focus:border-rs-primary transition-all text-rs-text text-sm appearance-none">
                 {SERAT_OPTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -215,9 +215,9 @@ export function EcoNutrition() {
             {/* Kat 2: Pati */}
             <div>
               <label className="flex items-center gap-1.5 text-xs font-bold text-rs-text mb-1">
-                <span>🌽</span> Kat. 2 — Sumber Pati / BETN (Energi Fermentasi)
+                <span>🌽</span> Sumber Pati
               </label>
-              <p className="text-xs text-rs-muted mb-2">Pati 21.8–53% BK dapat menurunkan metana 3–28%.</p>
+
               <select value={patiId} onChange={e => setPatiId(e.target.value)}
                 className="w-full px-3 py-2.5 min-h-[44px] bg-rs-card-sub border-2 border-rs-border rounded-xl focus:outline-none focus:border-rs-primary transition-all text-rs-text text-sm appearance-none">
                 {PATI_OPTIONS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -228,9 +228,9 @@ export function EcoNutrition() {
             {/* Kat 3: Protein (Optional) */}
             <div>
               <label className="flex items-center gap-1.5 text-xs font-bold text-rs-text mb-1">
-                <span>🌿</span> Kat. 3 — Sumber Protein / Penyeimbang (Opsional)
+                <span>🌿</span> Sumber Protein
               </label>
-              <p className="text-xs text-rs-muted mb-2">Imbangan C/N yang tepat menurunkan metana hingga 21.87%.</p>
+
               <select value={proteinId} onChange={e => setProteinId(e.target.value)}
                 className="w-full px-3 py-2.5 min-h-[44px] bg-rs-card-sub border-2 border-rs-border rounded-xl focus:outline-none focus:border-rs-primary transition-all text-rs-text text-sm appearance-none">
                 {PROTEIN_OPTIONS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -240,7 +240,7 @@ export function EcoNutrition() {
 
             {/* Slider */}
             <div>
-              <div className="text-xs font-bold text-rs-text mb-2">⚖️ Timbangan Visual Rasio Pakan</div>
+              <div className="text-xs font-bold text-rs-text mb-2">⚖️ Timbangan Rasio Pakan</div>
               <div className="flex items-center justify-between text-xs font-bold mb-2">
                 <span className="px-2 py-1 rounded-lg bg-orange-50 border border-orange-200 text-orange-700">🌾 Serat {ratio}%</span>
                 <span className="px-2 py-1 rounded-lg bg-[#e2f0ea] border border-[#c1d1c8] text-[#4c7766]">🌽 Pati {100 - ratio}%</span>
